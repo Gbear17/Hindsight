@@ -41,6 +41,7 @@ install_system_deps() {
         printf "${YELLOW}The following dependencies are missing: %s${NC}\n" "${missing_deps[*]}"
         read -p "May I install them using 'sudo pacman -S'? (y/n) " -n 1 -r; echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then sudo pacman -S --noconfirm "${missing_deps[@]}"; else log_error "User aborted."; exit 1; fi
+        if [[ $REPLY =~ ^[Yy$ ]; then sudo pacman -S --noconfirm "${missing_deps[@]}"; else log_error "User aborted."; exit 1; fi
     fi
     printf "All core system dependencies are installed.\n"
 }
@@ -120,11 +121,11 @@ EOL
 clear; printf "${GREEN}===============================\n Hindsight v5 Automated Installer \n===============================${NC}\n"
 
 log_step "Installation Path Setup"
-read -p "Enter the full path for the Hindsight project directory [default: $HOME/hindsight]: " HINDSIGHT_PATH
-HINDSIGHT_PATH=${HINDSIGHT_PATH:-"$HOME/hindsight"}
+HINDSIGHT_PATH="$HOME/hindsight"
+printf "Installing Hindsight to the default location: %s\n" "$HINDSIGHT_PATH"
 APP_PATH="$HINDSIGHT_PATH/app"
 
-if [ -d "$HINDSIGHT_PATH" ] && [ "$(ls -A $HINDSIGHT_PATH)" ]; then
+if [ -d "$HINDSIGHT_PATH" ] && [ "$(ls -A $HINDSIGHT_PATH)" ; then
     log_error "Installation directory '$HINDSIGHT_PATH' already exists and is not empty. Aborting."
     exit 1
 fi
@@ -194,3 +195,4 @@ printf "2. Enable services to run after logout with this one-time command:\n"
 printf "   ${YELLOW}loginctl enable-linger \$(whoami)${NC}\n"
 printf "\n"
 printf "3. ${YELLOW}REBOOT${NC} your computer to apply all changes.\n"
+
