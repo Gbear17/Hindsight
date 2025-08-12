@@ -1,0 +1,26 @@
+# Python
+app/venv/
+__pycache__/
+*.pyc
+
+# User-generated data and logs
+data/
+logs/
+
+# Secret credentials
+app/service-account.json
+
+# OS-specific
+.DS_Store
+
+# System Trash
+.Trash-1000/
+
+# Log file
+app/nohup.out
+
+# 
+lost+found
+
+#
+.vscode

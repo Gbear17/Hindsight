@@ -1,0 +1,12 @@
+Flask
+Flask-Cors
+gunicorn
+google-generativeai
+Pillow
+numpy
+faiss-cpu
+rich
+psutil
+sentence-transformers
+torch
+pynput
