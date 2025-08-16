@@ -1,0 +1,8 @@
+[Unit]
+Description=Hindsight Search API Service
+[Service]
+ExecStart=EXECSTART_PLACEHOLDER
+Restart=always
+Environment=ENVIRONMENT_PLACEHOLDER
+[Install]
+WantedBy=default.target

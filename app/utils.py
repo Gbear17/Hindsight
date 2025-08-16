@@ -19,26 +19,42 @@
 
 import os
 import logging
-from logging.handlers import RotatingFileHandler
+from logging.handlers import WatchedFileHandler
 import config
+
+# --- MODIFIED: Use WatchedFileHandler for process-safe logging ---
+class UnbufferedWatchedFileHandler(WatchedFileHandler):
+    """
+    A custom WatchedFileHandler that flushes the stream after every emit.
+    This is process-safe and ensures log messages are written to disk immediately,
+    which is crucial for real-time monitoring by other processes like the manager.
+    """
+    def emit(self, record):
+        super().emit(record)
+        # Flush the stream to ensure the log record is passed from the
+        # application's buffer to the operating system.
+        self.flush()
+        # Force the operating system to write its buffer to disk immediately.
+        # This is the key to eliminating the lag.
+        if self.stream:
+            os.fsync(self.stream.fileno())
 
 def setup_logger(logger_name):
     """Configures and returns a logger."""
     os.makedirs(config.LOG_DIR, exist_ok=True)
     
     logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.INFO) # Default to INFO, can be changed in specific scripts if needed
+    logger.setLevel(logging.INFO)
     logger.propagate = False
 
     # Add handler only if it hasn't been added before
     if not logger.handlers:
-        # Create a rotating file handler
-        handler = RotatingFileHandler(config.LOG_FILE, maxBytes=5*1024*1024, backupCount=5)
+        # Use the correct, unbuffered, process-safe handler.
+        handler = UnbufferedWatchedFileHandler(config.LOG_FILE)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
-        # Also log to console
         consoleHandler = logging.StreamHandler()
         consoleHandler.setFormatter(formatter)
         logger.addHandler(consoleHandler)

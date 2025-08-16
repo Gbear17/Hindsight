@@ -1,0 +1,4 @@
+[Unit]
+Description=Hindsight FAISS Index Rebuild
+[Service]
+ExecStart=EXECSTART_PLACEHOLDER

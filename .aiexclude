@@ -4,8 +4,9 @@ __pycache__/
 *.pyc
 
 # User-generated data and logs
-data/
-logs/
+data/db
+data/ocr_text
+data/screenshots
 
 # Secret credentials
 app/service-account.json
@@ -25,7 +26,3 @@ app/nohup.out
 
 # Archive folder
 archive
-
-# Info files
-resources/my-system-details.png
-resources/hindsight_to-do.csv

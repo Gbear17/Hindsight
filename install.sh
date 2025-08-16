@@ -17,8 +17,8 @@
 
 set -e
 GREEN="\033[0;32m"; RED="\033[0;31m"; YELLOW="\033[0;33m"; CYAN="\033[0;36m"; NC="\033[0m"
-log_step() { printf "\n${GREEN}--- %s ---${NC}\n" "$1"; }
-log_error() { printf "${RED}ERROR: %s${NC}\n" "$1"; }
+log_step() { printf "\n%b--- %s ---%b\n" "${GREEN}" "$1" "${NC}"; }
+log_error() { printf "%bERROR: %s%b\n" "${RED}" "$1" "${NC}"; }
 
 GITLAB_REPO_URL="https://gitlab.com/garrett.wyrick/hindsight.git"
 
@@ -41,7 +41,7 @@ install_system_deps() {
         printf "${YELLOW}The following dependencies are missing: %s${NC}\n" "${missing_deps[*]}"
         read -p "May I install them using 'sudo pacman -S'? (y/n) " -n 1 -r; echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then sudo pacman -S --noconfirm "${missing_deps[@]}"; else log_error "User aborted."; exit 1; fi
-        if [[ $REPLY =~ ^[Yy$ ]; then sudo pacman -S --noconfirm "${missing_deps[@]}"; else log_error "User aborted."; exit 1; fi
+        if [[ $REPLY =~ ^[Yy$ ]]; then sudo pacman -S --noconfirm "${missing_deps[@]}"; else log_error "User aborted."; exit 1; fi
     fi
     printf "All core system dependencies are installed.\n"
 }
@@ -53,79 +53,27 @@ write_config_files() {
     mkdir -p "$HOME/.config/systemd/user" "$HOME/.local/share/applications" "$HOME/.config/autostart"
 
     # Systemd Service Files
-    cat > "$HOME/.config/systemd/user/hindsight-api.service" << EOL
-[Unit]
-Description=Hindsight Search API Service
-[Service]
-ExecStart=$app_path/venv/bin/gunicorn --enable-stdio-inheritance --bind localhost:5000 hindsight_api:app
-WorkingDirectory=$app_path
-Restart=always
-Environment="GOOGLE_APPLICATION_CREDENTIALS=$app_path/service-account.json"
-[Install]
-WantedBy=default.target
-EOL
-    cat > "$HOME/.config/systemd/user/hindsight-rebuild.service" << EOL
-[Unit]
-Description=Hindsight FAISS Index Rebuild
-[Service]
-ExecStart=$app_path/venv/bin/python $app_path/rebuild_index.py
-Environment="GOOGLE_APPLICATION_CREDENTIALS=$app_path/service-account.json"
-EOL
-    cat > "$HOME/.config/systemd/user/hindsight-rebuild.timer" << EOL
-[Unit]
-Description=Run Hindsight FAISS Index Rebuild every 15 minutes
-[Timer]
-OnCalendar=*:0/15
-Persistent=true
-[Install]
-WantedBy=timers.target
-EOL
-    cat > "$HOME/.config/systemd/user/hindsight-daemon.service" << EOL
-[Unit]
-Description=Hindsight Memory Daemon
-[Service]
-WorkingDirectory=$app_path
-ExecStart=$app_path/scripts/start_daemon.sh
-Restart=always
-RestartSec=3
-Environment=DISPLAY=:0
-[Install]
-WantedBy=default.target
-EOL
+    cp "$HINDSIGHT_PATH/resources/hindsight-api.service" "$HOME/.config/systemd/user/hindsight-api.service"
+    cp "$HINDSIGHT_PATH/resources/hindsight-rebuild.service" "$HOME/.config/systemd/user/hindsight-rebuild.service"
+    cp "$HINDSIGHT_PATH/resources/hindsight-rebuild.timer" "$HOME/.config/systemd/user/hindsight-rebuild.timer"
+    cp "$HINDSIGHT_PATH/resources/hindsight-daemon.service" "$HOME/.config/systemd/user/hindsight-daemon.service"
 
     # Desktop & Autostart Files
-    cat > "$HOME/.local/share/applications/hindsight-manager.desktop" << EOL
-[Desktop Entry]
-Type=Application
-Name=Hindsight Manager
-Comment=Manage and monitor Hindsight backend services
-Exec=gnome-terminal --geometry=90x24 -- "$app_path/scripts/launch_manager.sh"
-Icon=utilities-terminal
-Terminal=false
-Categories=Utility;
-EOL
-    cat > "$HOME/.config/autostart/recoll-hindsight.desktop" << EOL
-[Desktop Entry]
-Name=Recoll Indexer (Hindsight)
-Comment=Real-time file indexer for Hindsight
-Exec=recollindex -m
-Icon=recoll
-Terminal=false
-Type=Application
-X-GNOME-Autostart-enabled=true
-EOL
+    cp "$HINDSIGHT_PATH/resources/hindsight-manager.desktop" "$HOME/.local/share/applications/hindsight-manager.desktop"
+    cp "$HINDSIGHT_PATH/resources/recoll-hindsight.desktop" "$HOME/.config/autostart/recoll-hindsight.desktop"
+
     printf "Configuration files written.\n"
 }
 
 # --- Main Installation Logic ---
-clear; printf "${GREEN}===============================\n Hindsight v5 Automated Installer \n===============================${NC}\n"
+clear; printf "%b===============================\n Hindsight v5 Automated Installer \n===============================\n%b" "$GREEN" "$NC"
 
 log_step "Installation Path Setup"
 HINDSIGHT_PATH="$HOME/hindsight"
 printf "Installing Hindsight to the default location: %s\n" "$HINDSIGHT_PATH"
 APP_PATH="$HINDSIGHT_PATH/app"
 
-if [ -d "$HINDSIGHT_PATH" ] && [ "$(ls -A $HINDSIGHT_PATH)" ; then
+if [ -d "$HINDSIGHT_PATH" ] && [ "$(ls -A "$HINDSIGHT_PATH")" ]; then
     log_error "Installation directory '$HINDSIGHT_PATH' already exists and is not empty. Aborting."
     exit 1
 fi
@@ -188,11 +136,11 @@ systemctl --user enable hindsight-daemon.service
 systemctl --user enable hindsight-rebuild.timer
 printf "Services enabled.\n"
 
-printf "\n${GREEN}✅ Hindsight installation and configuration complete!${NC}\n"
-printf "\n${CYAN}--- FINAL STEPS ---${NC}\n"
+printf "\n%b✅ Hindsight installation and configuration complete!\n%b" "${GREEN}" "${NC}"
+printf "\n%b--- FINAL STEPS ---%b\n" "${CYAN}" "${NC}"
 printf "1. Place your 'service-account.json' file in: ${YELLOW}%s/${NC}\n" "$APP_PATH"
 printf "2. Enable services to run after logout with this one-time command:\n"
-printf "   ${YELLOW}loginctl enable-linger \$(whoami)${NC}\n"
+printf "   %bloginctl enable-linger \$(whoami)%b\n" "${YELLOW}" "${NC}"
 printf "\n"
-printf "3. ${YELLOW}REBOOT${NC} your computer to apply all changes.\n"
+printf "3. %bREBOOT%b your computer to apply all changes.\n" "${YELLOW}" "${NC}"
 

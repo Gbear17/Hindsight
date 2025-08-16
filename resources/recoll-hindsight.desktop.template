@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Recoll Indexer (Hindsight)
+Comment=Real-time file indexer for Hindsight
+Exec=recollindex -m
+Icon=recoll
+Terminal=false
+Type=Application
+X-GNOME-Autostart-enabled=true
