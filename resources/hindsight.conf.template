@@ -8,7 +8,7 @@ REFINER_MODEL="%%REFINER_MODEL%%"
 EXCLUDED_APPS=""
 
 # --- Developer Settings ---
-GIT_BRANCH="main"
+GIT_BRANCH="%%GIT_BRANCH%%"
 
 # --- System Paths (Auto-generated) ---
 HINDSIGHT_PATH="%%HINDSIGHT_PATH%%"
