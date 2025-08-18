@@ -36,6 +36,8 @@ SYSTEMD_PATH="$HOME/.config/systemd/user"
 DESKTOP_APPS_PATH="$HOME/.local/share/applications"
 AUTOSTART_PATH="$HOME/.config/autostart"
 
+mkdir -p "$SYSTEMD_PATH" "$DESKTOP_APPS_PATH" "$AUTOSTART_PATH"
+
 # --- 2. Stop Services ---
 echo "Stopping all Hindsight services..."
 "$SCRIPTS_PATH/stop_hindsight.sh"
