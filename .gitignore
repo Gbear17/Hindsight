@@ -7,6 +7,9 @@ __pycache__/
 data/
 logs/
 
+# User-specific configuration
+hindsight.conf
+
 # Secret credentials
 app/service-account.json
 
@@ -23,9 +26,8 @@ app/nohup.out
 # Visual Studio Code
 .vscode
 
-# Archive folder
-archive
+# Backups folder
+backups
 
 # Info files
 resources/my-system-details.png
-resources/system-details-02.png
