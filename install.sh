@@ -82,6 +82,15 @@ POLL_INTERVAL=${POLL_INTERVAL:-5}
 read -p "AI model for query refinement [gemini-2.5-flash]: " REFINER_MODEL
 REFINER_MODEL=${REFINER_MODEL:-"gemini-2.5-flash"}
 
+# --- New Developer Settings Prompt ---
+printf "\n"
+GIT_BRANCH="main" # Initialize with default value
+read -p "Configure developer settings (e.g., git branch)? (y/n): " dev_choice
+if [[ "$dev_choice" =~ ^[Yy]$ ]]; then
+    read -p "Git branch to check for updates [main]: " dev_branch
+    GIT_BRANCH=${dev_branch:-"main"}
+fi
+
 # --- 3. Generate hindsight.conf ---
 log_step "Generating Configuration File"
 APP_PATH="$HINDSIGHT_PATH/app"
@@ -95,6 +104,7 @@ sed -i "s|%%VERSION%%|0.6|g" hindsight.conf
 sed -i "s|%%DAYS_TO_KEEP%%|$DAYS_TO_KEEP|g" hindsight.conf
 sed -i "s|%%POLL_INTERVAL%%|$POLL_INTERVAL|g" hindsight.conf
 sed -i "s|%%REFINER_MODEL%%|$REFINER_MODEL|g" hindsight.conf
+sed -i "s|%%GIT_BRANCH%%|$GIT_BRANCH|g" hindsight.conf
 sed -i "s|%%HINDSIGHT_PATH%%|$HINDSIGHT_PATH|g" hindsight.conf
 sed -i "s|%%APP_PATH%%|$APP_PATH|g" hindsight.conf
 sed -i "s|%%SCRIPTS_PATH%%|$SCRIPTS_PATH|g" hindsight.conf
