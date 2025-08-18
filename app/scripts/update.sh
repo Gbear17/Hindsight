@@ -55,7 +55,7 @@ fi
 
 # --- 2. Version Comparison ---
 echo "Checking for remote updates..."
-REMOTE_CONF_URL="https://gitlab.com/garrett.wyrick/hindsight/-/raw/$GIT_BRANCH/hindsight.conf"
+REMOTE_CONF_URL="https://gitlab.com/garrett.wyrick/hindsight/-/raw/$GIT_BRANCH/resources/hindsight.conf.template"
 REMOTE_VERSION=$(curl -s "$REMOTE_CONF_URL" | grep "^VERSION=" | cut -d'=' -f2- | sed 's/"//g')
 
 if [ -z "$REMOTE_VERSION" ]; then
