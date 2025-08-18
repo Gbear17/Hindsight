@@ -1,10 +1,12 @@
 [Unit]
 Description=Hindsight Memory Daemon
+After=graphical-session.target
+
 [Service]
-WorkingDirectory=WORKINGDIRECTORY_PLACEHOLDER
-ExecStart=EXECSTART_PLACEHOLDER
+ExecStart=%%SCRIPTS_PATH%%/start_daemon.sh
+WorkingDirectory=%%APP_PATH%%
 Restart=always
-RestartSec=3
-Environment=DISPLAY=:0
+RestartSec=10
+
 [Install]
 WantedBy=default.target

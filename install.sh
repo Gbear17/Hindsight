@@ -20,29 +20,31 @@
 # and the complete setup of the Hindsight application.
 
 set -e # Exit immediately if a command exits with a non-zero status.
-GREEN="\033[0;32m"; RED="\033[0;31m"; YELLOW="\033[0;33m"; CYAN="\033[0;36m"; NC="\033[0m"
 
-log_step() { printf "\n%b--- %s ---%b\n" "${GREEN}" "$1" "${NC}"; }
-log_error() { printf "%bERROR: %s%b\n" "${RED}" "$1" "${NC}"; }
+# --- Source the helper file for logging and robust command execution ---
+# This assumes install.sh is in the project root and helpers.sh is in app/scripts/
+source "$(pwd)/app/scripts/helpers.sh"
 
 # --- 1. Welcome & Pre-flight Checks ---
 clear
-printf "%b=======================================\n Hindsight Unified Installer & Updater \n=======================================%b\n" "$GREEN" "$NC"
+echo -e "${GREEN}=======================================${NC}"
+echo -e "${GREEN} Hindsight Unified Installer & Updater ${NC}"
+echo -e "${GREEN}=======================================${NC}\n"
 
 HINDSIGHT_PATH=$(eval echo ~$USER)/hindsight
 
 if [ -d "$HINDSIGHT_PATH" ]; then
-    printf "${YELLOW}An existing Hindsight installation was found at %s.${NC}\n" "$HINDSIGHT_PATH"
+    echo -e "${YELLOW}An existing Hindsight installation was found at ${HINDSIGHT_PATH}.${NC}"
     read -p "Create a backup of the existing installation? (y/n): " choice
     if [[ "$choice" =~ ^[Yy]$ ]]; then
         mkdir -p "$HINDSIGHT_PATH/backups"
         BACKUP_FILE="$HINDSIGHT_PATH/backups/hindsight_backup_$(date +%s).zip"
-        printf "Backing up to %s...\n" "$BACKUP_FILE"
+        log_info "Backing up to ${BACKUP_FILE}..."
         zip -r "$BACKUP_FILE" "$HINDSIGHT_PATH" -x "$HINDSIGHT_PATH/backups/*"
     fi
 fi
 
-log_step "Checking System Dependencies"
+log_info "Checking System Dependencies"
 missing_deps=()
 required_deps=("git" "curl" "zip" "recoll" "maim" "xdotool" "tesseract" "gnome-terminal")
 
@@ -53,26 +55,27 @@ for dep in "${required_deps[@]}"; do
 done
 
 if [ ${#missing_deps[@]} -ne 0 ]; then
-    printf "${YELLOW}The following dependencies are missing: %s${NC}\n" "${missing_deps[*]}"
+    echo -e "${YELLOW}The following dependencies are missing: ${missing_deps[*]}${NC}"
     read -p "May I install them using 'sudo pacman -S'? (y/n): " choice
     if [[ "$choice" =~ ^[Yy]$ ]]; then
+        # This command needs to be run with user interaction, so we don't wrap it in run_command
         sudo pacman -S --noconfirm "${missing_deps[@]}"
     else
         log_error "User aborted. Please install dependencies manually and re-run."
         exit 1
     fi
 fi
-printf "All system dependencies are met.\n"
+log_info "All system dependencies are met."
 
 # --- 2. Interactive Configuration ---
-log_step "User Configuration"
-printf "Please provide the following settings (press Enter to accept defaults):\n\n"
-
-printf "Storage Recommendations (Estimated):\n"
-printf " - 30 days:  ~33 GB\n"
-printf " - 90 days:  ~99 GB\n"
-printf " - 180 days: ~198 GB\n"
-printf " - 365 days: ~402 GB\n"
+echo -e "\n${GREEN}--- User Configuration ---${NC}"
+echo "Please provide the following settings (press Enter to accept defaults):"
+echo ""
+echo "Storage Recommendations (Estimated):"
+echo " - 30 days:  ~33 GB"
+echo " - 90 days:  ~99 GB"
+echo " - 180 days: ~198 GB"
+echo " - 365 days: ~402 GB"
 read -p "Days of history to keep [90]: " DAYS_TO_KEEP
 DAYS_TO_KEEP=${DAYS_TO_KEEP:-90}
 
@@ -82,8 +85,7 @@ POLL_INTERVAL=${POLL_INTERVAL:-5}
 read -p "AI model for query refinement [gemini-2.5-flash]: " REFINER_MODEL
 REFINER_MODEL=${REFINER_MODEL:-"gemini-2.5-flash"}
 
-# --- New Developer Settings Prompt ---
-printf "\n"
+echo ""
 GIT_BRANCH="main" # Initialize with default value
 read -p "Configure developer settings (e.g., git branch)? (y/n): " dev_choice
 if [[ "$dev_choice" =~ ^[Yy]$ ]]; then
@@ -92,7 +94,7 @@ if [[ "$dev_choice" =~ ^[Yy]$ ]]; then
 fi
 
 # --- 3. Generate hindsight.conf ---
-log_step "Generating Configuration File"
+log_info "Generating Configuration File"
 APP_PATH="$HINDSIGHT_PATH/app"
 SCRIPTS_PATH="$APP_PATH/scripts"
 VENV_PATH="$APP_PATH/venv"
@@ -116,39 +118,44 @@ sed -i "s|%%DB_DIR%%|$DATA_DIR/db|g" hindsight.conf
 sed -i "s|%%LOG_FILE%%|$DATA_DIR/hindsight.log|g" hindsight.conf
 sed -i "s|%%SERVICE_ACCOUNT_JSON%%|$APP_PATH/service-account.json|g" hindsight.conf
 
-printf "hindsight.conf generated successfully.\n"
+log_info "hindsight.conf generated successfully."
 
-# --- 4. Initial Setup & File Copy ---
-log_step "Copying Project Files"
+# --- 4. Make Source Scripts Executable FIRST ---
+log_info "Setting script permissions"
+chmod +x "$(pwd)/app/scripts/"*.sh
+log_info "Script permissions set."
+
+# --- 5. Initial Setup & File Copy ---
+log_info "Copying Project Files"
 mkdir -p "$HINDSIGHT_PATH"
-# Use rsync for a robust copy, excluding git files and the installer itself
-rsync -a --exclude='.git/' --exclude='install.sh' "$(pwd)/" "$HINDSIGHT_PATH/"
-printf "Files copied to %s.\n" "$HINDSIGHT_PATH"
+# rsync -a will now preserve the executable permissions we just set.
+run_command rsync -a --exclude='.git/' --exclude='install.sh' "$(pwd)/" "$HINDSIGHT_PATH/"
+log_info "Files copied to ${HINDSIGHT_PATH}."
 
-# --- 5. Python Environment Setup ---
-log_step "Setting up Python Virtual Environment"
-python -m venv "$VENV_PATH"
-"$VENV_PATH/bin/pip" install -r "$HINDSIGHT_PATH/requirements.txt"
-printf "Python environment ready.\n"
+# --- 6. Python Environment Setup ---
+log_info "Setting up Python Virtual Environment"
+run_command python -m venv "$VENV_PATH"
+log_info "Virtual environment created."
+run_command "$VENV_PATH/bin/pip" install -r "$HINDSIGHT_PATH/requirements.txt"
+log_info "Python requirements installed."
 
-# --- 6. & 7. Execute Configuration & Update ---
-log_step "Running Initial Configuration"
-chmod +x "$SCRIPTS_PATH"/*.sh
+# --- 7 & 8. Execute Configuration & Update ---
+log_info "Running Initial Configuration"
 "$SCRIPTS_PATH/configure.sh"
 
-log_step "Checking for Updates"
+log_info "Checking for Updates"
 "$SCRIPTS_PATH/update.sh"
 update_exit_code=$?
 
 if [ "$update_exit_code" -eq 10 ]; then
-    log_step "Update downloaded, re-running configuration"
+    log_info "Update downloaded, re-running configuration"
     "$SCRIPTS_PATH/configure.sh"
 fi
 
-# --- 8. Final Instructions ---
-printf "\n%b✅ Hindsight installation and configuration complete!%b\n" "${GREEN}" "${NC}"
-printf "\n%b--- FINAL STEPS ---%b\n" "${CYAN}" "${NC}"
-printf "1. Place your 'service-account.json' file in: ${YELLOW}%s/${NC}\n" "$APP_PATH"
-printf "2. Enable services to run after logout with this one-time command:\n"
-printf "   %bloginctl enable-linger \$(whoami)%b\n" "${YELLOW}" "${NC}"
-printf "\n3. %bREBOOT%b your computer to apply all changes.\n" "${YELLOW}" "${NC}"
+# --- 9. Final Instructions ---
+echo -e "\n${GREEN}✅ Hindsight installation and configuration complete!${NC}"
+echo -e "\n${CYAN}--- FINAL STEPS ---${NC}"
+echo -e "1. Place your 'service-account.json' file in: ${YELLOW}${APP_PATH}/${NC}"
+echo -e "2. Enable services to run after logout with this one-time command:"
+echo -e "   ${YELLOW}loginctl enable-linger \$(whoami)${NC}"
+echo -e "\n3. ${YELLOW}REBOOT${NC} your computer to apply all changes."

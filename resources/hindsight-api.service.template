@@ -1,8 +1,13 @@
 [Unit]
-Description=Hindsight Search API Service
+Description=Hindsight API Service
+After=network.target
+
 [Service]
-ExecStart=EXECSTART_PLACEHOLDER
-Restart=always
-Environment=ENVIRONMENT_PLACEHOLDER
+Type=simple
+ExecStart=%%VENV_PATH%%/bin/gunicorn --chdir %%APP_PATH%% --enable-stdio-inheritance --bind localhost:5000 hindsight_api:app
+Environment="GOOGLE_APPLICATION_CREDENTIALS=%%SERVICE_ACCOUNT_JSON%%"
+Restart=on-failure
+RestartSec=5
+
 [Install]
 WantedBy=default.target

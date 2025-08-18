@@ -1,7 +1,10 @@
 [Unit]
-Description=Run Hindsight FAISS Index Rebuild every 15 minutes
+Description=Run Hindsight indexer every 15 minutes
+
 [Timer]
-OnCalendar=*:0/15
-Persistent=true
+OnBootSec=5min
+OnUnitActiveSec=15min
+Unit=hindsight-rebuild.service
+
 [Install]
 WantedBy=timers.target

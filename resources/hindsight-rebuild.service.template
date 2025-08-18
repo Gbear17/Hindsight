@@ -1,4 +1,6 @@
 [Unit]
-Description=Hindsight FAISS Index Rebuild
+Description=Hindsight - Rebuild FAISS and Recoll Index
+
 [Service]
-ExecStart=EXECSTART_PLACEHOLDER
+Type=oneshot
+ExecStart=%%VENV_PATH%%/bin/python %%APP_PATH%%/rebuild_index.py
