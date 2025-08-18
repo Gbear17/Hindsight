@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Hindsight: A Personal Memory Archive
 # Copyright (C) 2025 gcwyrick
 #

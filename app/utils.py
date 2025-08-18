@@ -14,43 +14,40 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# /home/gcwyrick/hindsight/app/utils.py
-# Utility functions for the Hindsight application.
-
 import os
 import logging
 from logging.handlers import WatchedFileHandler
-import config
+import configparser
 
-# --- MODIFIED: Use WatchedFileHandler for process-safe logging ---
+# --- New Config Parser Logic ---
+config = configparser.ConfigParser()
+config_path = os.path.expanduser('~/hindsight/hindsight.conf')
+config.read(config_path)
+
+# --- Fetching settings ---
+LOG_FILE = config.get('System Paths', 'LOG_FILE')
+LOG_DIR = os.path.dirname(LOG_FILE)
+
 class UnbufferedWatchedFileHandler(WatchedFileHandler):
     """
     A custom WatchedFileHandler that flushes the stream after every emit.
-    This is process-safe and ensures log messages are written to disk immediately,
-    which is crucial for real-time monitoring by other processes like the manager.
     """
     def emit(self, record):
         super().emit(record)
-        # Flush the stream to ensure the log record is passed from the
-        # application's buffer to the operating system.
         self.flush()
-        # Force the operating system to write its buffer to disk immediately.
-        # This is the key to eliminating the lag.
         if self.stream:
             os.fsync(self.stream.fileno())
 
 def setup_logger(logger_name):
     """Configures and returns a logger."""
-    os.makedirs(config.LOG_DIR, exist_ok=True)
+    os.makedirs(LOG_DIR, exist_ok=True)
     
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.INFO)
     logger.propagate = False
 
-    # Add handler only if it hasn't been added before
     if not logger.handlers:
-        # Use the correct, unbuffered, process-safe handler.
-        handler = UnbufferedWatchedFileHandler(config.LOG_FILE)
+        handler = UnbufferedWatchedFileHandler(LOG_FILE)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
         logger.addHandler(handler)

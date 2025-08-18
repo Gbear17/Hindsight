@@ -17,19 +17,31 @@
 import os
 import time
 import glob
-import config
+import configparser
 from utils import setup_logger
+
+# --- New Config Parser Logic ---
+config = configparser.ConfigParser()
+config_path = os.path.expanduser('~/hindsight/hindsight.conf')
+config.read(config_path)
+
+# --- Fetching settings ---
+DAYS_TO_KEEP = config.getint('User Settings', 'DAYS_TO_KEEP')
+SCREENSHOT_DIR = config.get('System Paths', 'SCREENSHOT_DIR')
+OCR_TEXT_DIR = config.get('System Paths', 'OCR_TEXT_DIR')
+FAISS_INDEX_PATH = config.get('System Paths', 'DB_DIR') + '/hindsight_faiss.index'
+ID_MAP_PATH = config.get('System Paths', 'DB_DIR') + '/hindsight_id_map.json'
 
 logger = setup_logger("HindsightCleanup")
 
 def delete_old_data(dry_run=False):
     """Finds and deletes data files older than DAYS_TO_KEEP."""
-    logger.info(f"Starting data cleanup process. Retention period: {config.DAYS_TO_KEEP} days.")
+    logger.info(f"Starting data cleanup process. Retention period: {DAYS_TO_KEEP} days.")
     now = time.time()
-    cutoff = now - (config.DAYS_TO_KEEP * 86400)
+    cutoff = now - (DAYS_TO_KEEP * 86400)
     files_to_delete = []
 
-    for dir_path in [config.SCREENSHOT_DIR, config.OCR_TEXT_DIR]:
+    for dir_path in [SCREENSHOT_DIR, OCR_TEXT_DIR]:
         try:
             files = glob.glob(os.path.join(dir_path, "*"))
             for f in files:
@@ -44,7 +56,7 @@ def delete_old_data(dry_run=False):
         return
 
     if dry_run:
-        logger.info(f"[DRY RUN] Would delete {len(files_to_delete)} files older than {config.DAYS_TO_KEEP} days.")
+        logger.info(f"[DRY RUN] Would delete {len(files_to_delete)} files older than {DAYS_TO_KEEP} days.")
         for f in files_to_delete[:5]:
              logger.info(f"[DRY RUN] ... {os.path.basename(f)}")
         if len(files_to_delete) > 5:
@@ -67,7 +79,7 @@ def delete_old_data(dry_run=False):
 
 def clean_faiss_index(dry_run=False):
     """Deletes the FAISS index and map files to force a full rebuild."""
-    index_files = [config.FAISS_INDEX_PATH, config.ID_MAP_PATH]
+    index_files = [FAISS_INDEX_PATH, ID_MAP_PATH]
     files_exist = [f for f in index_files if os.path.exists(f)]
 
     if not files_exist:

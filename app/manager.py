@@ -21,6 +21,7 @@ import glob
 from datetime import datetime, timezone, timedelta
 import termios
 import tty
+import configparser
 
 from rich.console import Console
 from rich.layout import Layout
@@ -29,7 +30,20 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-import config
+# --- New Config Parser Logic ---
+config = configparser.ConfigParser()
+config_path = os.path.expanduser('~/hindsight/hindsight.conf')
+config.read(config_path)
+
+# --- Fetching settings ---
+LOG_FILE = config.get('System Paths', 'LOG_FILE')
+DB_DIR = config.get('System Paths', 'DB_DIR')
+ID_MAP_PATH = os.path.join(DB_DIR, 'hindsight_id_map.json')
+OCR_TEXT_DIR = config.get('System Paths', 'OCR_TEXT_DIR')
+APP_PATH = config.get('System Paths', 'APP_PATH')
+SCRIPTS_PATH = config.get('System Paths', 'SCRIPTS_PATH')
+VENV_PATH = config.get('System Paths', 'VENV_PATH')
+
 from utils import setup_logger
 
 console = Console()
@@ -39,8 +53,7 @@ logger = setup_logger("HindsightManager")
 app_state = {"mode": "normal"}
 SERVICES = ["hindsight-api.service", "hindsight-daemon.service", "hindsight-rebuild.timer"]
 
-# --- Helper Functions ---
-
+# --- Helper Functions (No changes needed here) ---
 def run_command(command, capture=False):
     """Runs a command, returns True/False or captured output."""
     try:
@@ -99,10 +112,11 @@ def get_resource_usage():
             continue
     return cpu, mem, len(hindsight_processes)
 
+# --- Functions using new config variables ---
 def get_last_successful_run_from_log():
     """Efficiently finds the timestamp of the last successful index run using pure Python."""
     try:
-        with open(config.LOG_FILE, 'rb') as f:
+        with open(LOG_FILE, 'rb') as f:
             f.seek(0, os.SEEK_END)
             buffer = bytearray()
             while f.tell() > 0:
@@ -119,7 +133,7 @@ def get_last_successful_run_from_log():
     except (IOError, FileNotFoundError, IndexError):
         return "Pending"
     return "Pending"
-
+            
 def calculate_next_run(now, schedule="*:0/15"):
     """Calculates the next run time based on a simple cron-like schedule."""
     try:
@@ -137,19 +151,19 @@ def calculate_next_run(now, schedule="*:0/15"):
             return (now + timedelta(hours=1)).replace(minute=base, second=0, microsecond=0)
     except (IndexError, ValueError):
         return None
-
+    
 def get_index_info():
     """Gathers and returns a dictionary of information about the search indexes."""
     info = {"state": "[red]Unknown[/red]", "last_run": "N/A",
             "next_run": "N/A", "items": 0, "unprocessed": 0}
-    if os.path.exists(config.ID_MAP_PATH):
+    if os.path.exists(ID_MAP_PATH):
         try:
-            with open(config.ID_MAP_PATH, 'r') as f:
+            with open(ID_MAP_PATH, 'r') as f:
                 info["items"] = len(json.load(f))
         except (json.JSONDecodeError, IOError):
             pass
     try:
-        total_files = len(glob.glob(os.path.join(config.OCR_TEXT_DIR, "*.txt")))
+        total_files = len(glob.glob(os.path.join(OCR_TEXT_DIR, "*.txt")))
         info["unprocessed"] = max(0, total_files - info["items"])
     except IOError:
         pass
@@ -166,7 +180,6 @@ def get_index_info():
     return info
 
 # --- UI Rendering ---
-
 def make_layout() -> Layout:
     """Defines the Rich layout structure."""
     layout = Layout(name="root")
@@ -175,7 +188,7 @@ def make_layout() -> Layout:
     top_row.split_row(Layout(name="status"), Layout(name="resources"))
     layout["body"].split(top_row, Layout(name="index_status"))
     return layout
-
+    
 def update_dashboard_layout(layout: Layout) -> None:
     """Renders all the content for the dashboard UI."""
     header_grid = Table.grid(expand=True)
@@ -273,18 +286,18 @@ if __name__ == "__main__":
                         elif action == '2':
                             app_state["mode"] = "confirm_stop"
                         elif action == '3':
-                            run_command(f"gnome-terminal -- bash -c 'tail -n 200 -f {config.LOG_FILE}; exec bash'")
+                            run_command(f"gnome-terminal -- bash -c 'tail -n 200 -f {LOG_FILE}; exec bash'")
                         elif action == '4':
                             editor = os.environ.get('EDITOR', 'nano')
-                            config_file = os.path.join(config.BASE_PATH, "config.py")
-                            run_command(f"gnome-terminal -- bash -c '{editor} {config_file}; exec bash'")
+                            # The config path is now the source of truth
+                            run_command(f"gnome-terminal -- bash -c '{editor} {config_path}; exec bash'")
                         elif action == '5':
-                            reconfigure_script = os.path.join(config.BASE_PATH.parent, "reconfigure.sh")
+                            reconfigure_script = os.path.join(SCRIPTS_PATH, "configure.sh")
                             command = f"gnome-terminal -- bash -c '\"{reconfigure_script}\"; echo \"\nReconfiguration finished. Press Enter to close.\"; read'"
                             run_command(command)
                         elif action == '6':
-                            python_executable = os.path.join(config.BASE_PATH, "venv", "bin", "python")
-                            debugger_script = os.path.join(config.BASE_PATH, "debugger.py")
+                            python_executable = os.path.join(VENV_PATH, "bin", "python")
+                            debugger_script = os.path.join(APP_PATH, "debugger.py")
                             command = f"gnome-terminal -- bash -c '\"{python_executable}\" \"{debugger_script}\"; exec bash'"
                             run_command(command)
                 

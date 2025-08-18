@@ -41,13 +41,9 @@ DAYS_TO_KEEP = 90
 
 # List of window titles (case-insensitive) to exclude from screenshots.
 EXCLUDED_APPS = [
-    'hindsight manager',
-    'kgx',
-    'gnome-terminal',
-    'terminal',
     'keepassxc'
 ]
 
 # --- AI Model Settings ---
 EMBEDDING_MODEL = 'all-mpnet-base-v2'
-REFINER_MODEL = 'gemini-1.5-flash-latest'
+REFINER_MODEL = 'gemini-2.5-flash'

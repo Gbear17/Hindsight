@@ -21,9 +21,21 @@ import numpy as np
 import faiss
 import time
 from sentence_transformers import SentenceTransformer
-
-import config
+import configparser
 from utils import setup_logger
+
+# --- New Config Parser Logic ---
+config = configparser.ConfigParser()
+config_path = os.path.expanduser('~/hindsight/hindsight.conf')
+config.read(config_path)
+
+# --- Fetching settings ---
+# Note: EMBEDDING_MODEL is not user-configurable yet, so we can hardcode it for now
+EMBEDDING_MODEL = 'all-mpnet-base-v2'
+DB_DIR = config.get('System Paths', 'DB_DIR')
+OCR_TEXT_DIR = config.get('System Paths', 'OCR_TEXT_DIR')
+FAISS_INDEX_PATH = DB_DIR + '/hindsight_faiss.index'
+ID_MAP_PATH = DB_DIR + '/hindsight_id_map.json'
 
 logger = setup_logger("HindsightRebuildIndex")
 

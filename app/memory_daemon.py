@@ -14,18 +14,26 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Hindsight Polling Daemon (Refactored)
 import time
 import subprocess
 import threading
 import os
 from PIL import Image
-
-# --- Imports from new modules ---
-import config
+import configparser
 from utils import setup_logger
 
-# --- Setup logger ---
+# --- New Config Parser Logic ---
+config = configparser.ConfigParser()
+config_path = os.path.expanduser('~/hindsight/hindsight.conf')
+config.read(config_path)
+
+# --- Fetching settings ---
+POLL_INTERVAL = config.getint('User Settings', 'POLL_INTERVAL')
+EXCLUDED_APPS_STR = config.get('User Settings', 'EXCLUDED_APPS', fallback='')
+EXCLUDED_APPS = [app.strip() for app in EXCLUDED_APPS_STR.split(',') if app.strip()]
+SCREENSHOT_DIR = config.get('System Paths', 'SCREENSHOT_DIR')
+OCR_TEXT_DIR = config.get('System Paths', 'OCR_TEXT_DIR')
+
 logger = setup_logger("HindsightDaemon")
 
 # --- State Management ---

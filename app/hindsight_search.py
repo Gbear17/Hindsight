@@ -21,9 +21,22 @@ import numpy as np
 import faiss
 from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
-
-import config
+import configparser
 from utils import setup_logger
+
+# --- New Config Parser Logic ---
+config = configparser.ConfigParser()
+config_path = os.path.expanduser('~/hindsight/hindsight.conf')
+config.read(config_path)
+
+# --- Fetching settings ---
+REFINER_MODEL = config.get('User Settings', 'REFINER_MODEL')
+# The embedding model is a core component, not a user setting, so it remains hardcoded for now.
+EMBEDDING_MODEL = 'all-mpnet-base-v2' 
+DB_DIR = config.get('System Paths', 'DB_DIR')
+FAISS_INDEX_PATH = os.path.join(DB_DIR, 'hindsight_faiss.index')
+ID_MAP_PATH = os.path.join(DB_DIR, 'hindsight_id_map.json')
+
 
 logger = setup_logger("HindsightSearch")
 
@@ -35,27 +48,26 @@ refiner_model = None
 
 # --- Load the open-source embedding model ---
 try:
-    logger.info(f"Loading open-source embedding model: {config.EMBEDDING_MODEL}...")
-    embedding_model = SentenceTransformer(config.EMBEDDING_MODEL)
+    logger.info(f"Loading open-source embedding model: {EMBEDDING_MODEL}...")
+    embedding_model = SentenceTransformer(EMBEDDING_MODEL)
     logger.info("Embedding model loaded successfully.")
 except Exception as e:
     logger.critical(f"Failed to load SentenceTransformer model. Semantic search will be unavailable. Error: {e}")
 
 # --- Configure the Google refiner model ---
 try:
-    # This uses the service account credentials we set up
-    refiner_model = genai.GenerativeModel(config.REFINER_MODEL)
+    refiner_model = genai.GenerativeModel(REFINER_MODEL)
     logger.info("Successfully configured Gemini API for query refinement.")
 except Exception as e:
     logger.critical(f"Failed to configure Gemini refiner model. Refinement will be unavailable. Error: {e}")
 
 def init_search_components():
     global faiss_index, id_to_filepath_map
-    if faiss_index is None and os.path.exists(config.FAISS_INDEX_PATH):
+    if faiss_index is None and os.path.exists(FAISS_INDEX_PATH):
         try:
             logger.info("Loading FAISS index and file map into memory...")
-            faiss_index = faiss.read_index(config.FAISS_INDEX_PATH)
-            with open(config.ID_MAP_PATH, 'r', encoding='utf-8') as f:
+            faiss_index = faiss.read_index(FAISS_INDEX_PATH)
+            with open(ID_MAP_PATH, 'r', encoding='utf-8') as f:
                 id_to_filepath_map = json.load(f)
             logger.info(f"FAISS index and file map loaded successfully ({faiss_index.ntotal} items).")
         except Exception:
@@ -76,7 +88,6 @@ def get_faiss_matches(query, num_results=5):
         logger.warning("FAISS index or embedding model not loaded, skipping semantic search.")
         return []
     try:
-        # Generate embedding using the local open-source model
         query_embedding = embedding_model.encode(query)
 
         query_vector = np.array([query_embedding]).astype('float32')
