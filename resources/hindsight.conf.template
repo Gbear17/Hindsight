@@ -1,5 +1,6 @@
 # Hindsight Configuration File
-VERSION="%%VERSION%%"
+# This version number is updated by the developer with each release.
+VERSION="0.6"
 
 # --- User Settings ---
 DAYS_TO_KEEP="%%DAYS_TO_KEEP%%"
