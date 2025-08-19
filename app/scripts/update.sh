@@ -42,7 +42,7 @@ if [ ! -d "$HINDSIGHT_PATH/.git" ]; then
         echo "Update check cancelled."
         exit 0
     fi
-    
+
     echo "Converting to git repository..."
     BAK_DIR="${HINDSIGHT_PATH}_bak_$(date +%s)"
     mv "$HINDSIGHT_PATH" "$BAK_DIR"
@@ -50,7 +50,6 @@ if [ ! -d "$HINDSIGHT_PATH/.git" ]; then
     cp "$BAK_DIR/hindsight.conf" "$HINDSIGHT_PATH/hindsight.conf"
     echo "Conversion complete. The original directory has been backed up to $BAK_DIR"
     echo "It is safe to delete the backup directory after verifying your settings."
-    # The rest of the script will now run on the new git-based directory
 fi
 
 # --- 2. Version Comparison ---

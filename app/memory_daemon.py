@@ -71,15 +71,23 @@ def process_active_window():
     if not processing_lock.acquire(blocking=False):
         return
     try:
+        # --- START DEBUGGING BLOCK ---
+        print("--- MEMORY DAEMON DEBUG ---")
+        print(f"Value of SCREENSHOT_DIR: {SCREENSHOT_DIR}")
+        print(f"Value of OCR_TEXT_DIR: {OCR_TEXT_DIR}")
+        # --- END DEBUGGING BLOCK ---
+
         window_id, window_title = get_active_window_info()
         if not window_id or not window_title:
             return
-        if any(excluded in window_title.lower() for excluded in config.EXCLUDED_APPS):
+        if any(excluded in window_title.lower() for excluded in EXCLUDED_APPS):
             return
 
         timestamp = int(time.time())
-        new_screenshot_path = os.path.join(config.SCREENSHOT_DIR, f"{window_id}_{timestamp}.png")
-        
+        new_screenshot_path = os.path.join(SCREENSHOT_DIR, f"{window_id}_{timestamp}.png")
+
+        print(f"Attempting to save screenshot to: {new_screenshot_path}") # More debugging
+
         env = os.environ.copy()
         env['DISPLAY'] = ':0'
         subprocess.run(["maim", "--window", window_id, new_screenshot_path], check=True, capture_output=True, env=env)
@@ -96,9 +104,9 @@ def process_active_window():
                 logger.exception("Image comparison failed. Processing file anyway.")
 
         last_screenshot_paths[window_id] = new_screenshot_path
-        ocr_filename = os.path.join(config.OCR_TEXT_DIR, f"{window_id}_{timestamp}.txt")
+        ocr_filename = os.path.join(OCR_TEXT_DIR, f"{window_id}_{timestamp}.txt")
         extract_text_with_tesseract(new_screenshot_path, ocr_filename)
-        
+
         logger.info(f"Screenshot captured and processed for window: {window_title}")
 
     except subprocess.CalledProcessError:
@@ -109,13 +117,13 @@ def process_active_window():
         processing_lock.release()
 
 def main():
-    os.makedirs(config.SCREENSHOT_DIR, exist_ok=True)
-    os.makedirs(config.OCR_TEXT_DIR, exist_ok=True)
+    os.makedirs(SCREENSHOT_DIR, exist_ok=True)
+    os.makedirs(OCR_TEXT_DIR, exist_ok=True)
     logger.info("Hindsight Daemon started. Monitoring activity...")
     try:
         while True:
             process_active_window()
-            time.sleep(config.POLL_INTERVAL)
+            time.sleep(POLL_INTERVAL)
     except KeyboardInterrupt:
         logger.info("Hindsight Daemon shutting down.")
     except Exception:

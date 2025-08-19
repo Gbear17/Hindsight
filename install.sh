@@ -46,7 +46,7 @@ fi
 
 log_info "Checking System Dependencies"
 missing_deps=()
-required_deps=("git" "curl" "zip" "recoll" "maim" "xdotool" "tesseract" "gnome-terminal")
+required_deps=("git" "curl" "zip" "recoll" "maim" "xdotool" "tesseract" "tesseract-data-eng" "gnome-terminal")
 
 for dep in "${required_deps[@]}"; do
     if ! command -v "$dep" &> /dev/null; then
@@ -120,10 +120,11 @@ sed -i "s|%%SERVICE_ACCOUNT_JSON%%|$APP_PATH/service-account.json|g" hindsight.c
 
 log_info "hindsight.conf generated successfully."
 
-# --- 4. Make Source Scripts Executable FIRST ---
-log_info "Setting script permissions"
+# --- 4. Make Source Scripts and Python Fiels Executable ---
+log_info "Setting script and python file permissions"
 chmod +x "$(pwd)/app/scripts/"*.sh
-log_info "Script permissions set."
+chmod +x "$(pwd)/app/"*.py
+log_info "Script and python file permissions set."
 
 # --- 5. Initial Setup & File Copy ---
 log_info "Copying Project Files"
@@ -152,7 +153,14 @@ if [ "$update_exit_code" -eq 10 ]; then
     "$SCRIPTS_PATH/configure.sh"
 fi
 
-# --- 9. Final Instructions ---
+# --- 9. Enable Services ---
+log_info "Enabling services to start on login..."
+run_command systemctl --user enable hindsight-api.service
+run_command systemctl --user enable hindsight-daemon.service
+run_command systemctl --user enable hindsight-rebuild.timer
+log_info "Services enabled."
+
+# --- 10. Final Instructions ---
 echo -e "\n${GREEN}✅ Hindsight installation and configuration complete!${NC}"
 echo -e "\n${CYAN}--- FINAL STEPS ---${NC}"
 echo -e "1. Place your 'service-account.json' file in: ${YELLOW}${APP_PATH}/${NC}"

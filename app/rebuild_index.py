@@ -30,98 +30,83 @@ config_path = os.path.expanduser('~/hindsight/hindsight.conf')
 config.read(config_path)
 
 # --- Fetching settings ---
-# Note: EMBEDDING_MODEL is not user-configurable yet, so we can hardcode it for now
-EMBEDDING_MODEL = 'all-mpnet-base-v2'
 DB_DIR = config.get('System Paths', 'DB_DIR')
 OCR_TEXT_DIR = config.get('System Paths', 'OCR_TEXT_DIR')
-FAISS_INDEX_PATH = DB_DIR + '/hindsight_faiss.index'
-ID_MAP_PATH = DB_DIR + '/hindsight_id_map.json'
+FAISS_INDEX_PATH = os.path.join(DB_DIR, 'hindsight_faiss.index')
+ID_MAP_PATH = os.path.join(DB_DIR, 'hindsight_id_map.json')
+# The embedding model is a core component, not a user setting, so it's defined here.
+EMBEDDING_MODEL = 'all-mpnet-base-v2'
 
 logger = setup_logger("HindsightRebuildIndex")
 
-# --- Load the open-source embedding model ---
-try:
-    logger.info(f"Loading open-source embedding model: {config.EMBEDDING_MODEL}...")
-    embedding_model = SentenceTransformer(config.EMBEDDING_MODEL)
-    logger.info("Model loaded successfully.")
-except Exception as e:
-    logger.critical(f"Failed to load SentenceTransformer model. Error: {e}")
-    embedding_model = None
+def get_unprocessed_files(id_map):
+    """Finds all .txt files that are not yet in the ID map."""
+    indexed_files = set(id_map)
+    all_files = set(glob.glob(os.path.join(OCR_TEXT_DIR, "*.txt")))
+    return sorted(list(all_files - indexed_files))
 
-def incremental_rebuild_faiss():
-    if not embedding_model:
-        logger.error("Cannot rebuild index because the embedding model failed to load.")
+def incremental_rebuild_faiss(dry_run=False):
+    """
+    Incrementally updates the FAISS index and ID map with new text files.
+    If the index does not exist, it performs a full build.
+    """
+    logger.info("Starting index update cycle.")
+    start_time = time.time()
+
+    # Load existing index and map, or initialize new ones
+    if os.path.exists(FAISS_INDEX_PATH) and os.path.exists(ID_MAP_PATH):
+        logger.info("Loading existing FAISS index and ID map.")
+        faiss_index = faiss.read_index(FAISS_INDEX_PATH)
+        with open(ID_MAP_PATH, 'r', encoding='utf-8') as f:
+            id_to_filepath_map = json.load(f)
+    else:
+        logger.info("No existing index found. Initializing a new one.")
+        # Using a standard 768 dimension for sentence-transformers models
+        faiss_index = faiss.IndexFlatL2(768)
+        faiss_index = faiss.IndexIDMap(faiss_index)
+        id_to_filepath_map = []
+
+    unprocessed_files = get_unprocessed_files(id_to_filepath_map)
+
+    if not unprocessed_files:
+        logger.info("No new files to process. Index is up to date.")
         return
 
-    logger.info("Starting FAISS index update cycle.")
-    os.makedirs(config.DB_DIR, exist_ok=True)
+    if dry_run:
+        logger.info(f"[DRY RUN] Would process {len(unprocessed_files)} new files.")
+        return
 
-    if os.path.exists(config.FAISS_INDEX_PATH):
+    logger.info(f"Loading sentence embedding model: {EMBEDDING_MODEL}")
+    model = SentenceTransformer(EMBEDDING_MODEL)
+
+    logger.info(f"Processing {len(unprocessed_files)} new text files...")
+    new_embeddings = []
+    new_filepaths = []
+    for file_path in unprocessed_files:
         try:
-            index = faiss.read_index(config.FAISS_INDEX_PATH)
-            with open(config.ID_MAP_PATH, 'r', encoding='utf-8') as f:
-                id_to_filepath_map = json.load(f)
-            logger.info(f"Loaded existing FAISS index with {index.ntotal} items.")
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            if content.strip():
+                embedding = model.encode(content)
+                new_embeddings.append(embedding)
+                new_filepaths.append(file_path)
         except Exception:
-            logger.exception("Failed to load existing FAISS index or map. Creating new ones.")
-            embedding_dimension = embedding_model.get_sentence_embedding_dimension()
-            index = faiss.IndexFlatIP(embedding_dimension)
-            id_to_filepath_map = []
-    else:
-        embedding_dimension = embedding_model.get_sentence_embedding_dimension()
-        index = faiss.IndexFlatIP(embedding_dimension)
-        id_to_filepath_map = []
-        logger.info("No existing index found. Creating a new one.")
+            logger.exception(f"Failed to read or process file: {file_path}")
 
-    all_files = set(glob.glob(os.path.join(config.OCR_TEXT_DIR, "*.txt")))
-    processed_files = set(id_to_filepath_map)
-    new_files_to_process = sorted(list(all_files - processed_files))
+    if new_embeddings:
+        logger.info(f"Adding {len(new_embeddings)} new vectors to the FAISS index.")
+        new_indices = np.arange(len(id_to_filepath_map), len(id_to_filepath_map) + len(new_embeddings))
+        faiss_index.add_with_ids(np.array(new_embeddings).astype('float32'), new_indices)
+        id_to_filepath_map.extend(new_filepaths)
 
-    # --- BATCH PROCESSING OPTIMIZATION ---
-    texts_to_embed = []
-    valid_filepaths = []
-    newly_indexed_paths = []
-
-    if new_files_to_process:
-        logger.info(f"Found {len(new_files_to_process)} new file(s) to process.")
-        # Read all file contents into a list to prepare for efficient batch embedding.
-        for file_path in new_files_to_process:
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    text = f.read()
-                if text.strip():
-                    texts_to_embed.append(text)
-                    valid_filepaths.append(file_path)
-            except Exception as e:
-                logger.warning(f"Could not read or process {file_path}: {e}")
-
-        if texts_to_embed:
-            try:
-                logger.info(f"Starting batch embedding for {len(texts_to_embed)} documents...")
-                embeddings = embedding_model.encode(texts_to_embed, show_progress_bar=False)
-                embeddings_array = np.array(embeddings).astype('float32')
-
-                index.add(embeddings_array)
-                newly_indexed_paths = valid_filepaths
-                logger.info(f"Successfully added {len(newly_indexed_paths)} new items to FAISS index.")
-            except Exception as e:
-                logger.exception("A critical error occurred during batch embedding or FAISS index update. Index will not be updated this cycle.")
-        else:
-            logger.info("No new content found in files to embed.")
-    else:
-        logger.info("No new files to index. Index is up to date.")
-
-    # --- Finalize ---
-    # This block now runs every time, ensuring the final success message is always logged.
-    try:
-        # Extend the map only with paths that were successfully indexed in this run.
-        id_to_filepath_map.extend(newly_indexed_paths)
-        faiss.write_index(index, config.FAISS_INDEX_PATH)
-        with open(config.ID_MAP_PATH, 'w', encoding='utf-8') as f:
+        # Save the updated index and map
+        faiss.write_index(faiss_index, FAISS_INDEX_PATH)
+        with open(ID_MAP_PATH, 'w', encoding='utf-8') as f:
             json.dump(id_to_filepath_map, f)
-        logger.info(f"Index update cycle completed. Index now contains {index.ntotal} total items.")
-    except Exception:
-        logger.exception("A critical error occurred while saving the updated FAISS index or map file.")
+        logger.info("FAISS index and ID map have been updated and saved.")
+
+    end_time = time.time()
+    logger.info(f"Index update cycle completed in {end_time - start_time:.2f} seconds.")
 
 if __name__ == "__main__":
     incremental_rebuild_faiss()
