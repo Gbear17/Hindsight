@@ -71,12 +71,7 @@ def process_active_window():
     if not processing_lock.acquire(blocking=False):
         return
     try:
-        # --- START DEBUGGING BLOCK ---
-        print("--- MEMORY DAEMON DEBUG ---")
-        print(f"Value of SCREENSHOT_DIR: {SCREENSHOT_DIR}")
-        print(f"Value of OCR_TEXT_DIR: {OCR_TEXT_DIR}")
-        # --- END DEBUGGING BLOCK ---
-
+        
         window_id, window_title = get_active_window_info()
         if not window_id or not window_title:
             return
