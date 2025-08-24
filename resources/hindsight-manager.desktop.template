@@ -1,9 +1,8 @@
 [Desktop Entry]
-Version=1.0
-Type=Application
 Name=Hindsight Manager
-Comment=Manage the Hindsight Personal Memory Archive
-Exec=gnome-terminal --geometry=75x17 -- "%%SCRIPTS_PATH%%/launch_manager.sh"
-Icon=%%HINDSIGHT_PATH%%/resources/hindsight.png
+Comment=Manage the Hindsight personal memory archive
+Exec=%%EXEC_COMMAND%%
+Icon=%%HINDSIGHT_PATH%%/resources/hindsight_icon.png
 Terminal=false
+Type=Application
 Categories=Utility;

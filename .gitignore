@@ -23,9 +23,6 @@ lost+found
 # Log file
 app/nohup.out
 
-# Visual Studio Code
-.vscode
-
 # Backups folder
 backups
 
