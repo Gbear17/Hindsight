@@ -9,4 +9,3 @@ rich
 psutil
 sentence-transformers
 torch
-requests

@@ -17,15 +17,14 @@
 
 # Find the absolute path to the 'app' directory
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-APP_PATH="$SCRIPT_DIR/.."   # FIX
+APP_PATH="$SCRIPT_DIR/app"
 
 # --- Stop existing services ---
-systemctl --user stop hindsight-rebuild.timer 2>/dev/null || true
-systemctl --user stop hindsight-api.service 2>/dev/null || true
-systemctl --user stop hindsight-daemon.service 2>/dev/null || true
-pkill -f memory_daemon.py 2>/dev/null || true
+systemctl --user stop hindsight-api.service
+systemctl --user stop hindsight-rebuild.timer
+pkill -f memory_daemon.py
 # Add a small delay to allow processes to terminate cleanly
 sleep 2
 
-# --- Start / ensure running ---
-bash "$APP_PATH/scripts/start_hindsight.sh"
+# --- Run the startup script, which will handle starting and notifications ---
+bash "$APP_PATH/scripts/ensure_hindsight_running.sh"
