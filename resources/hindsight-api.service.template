@@ -3,10 +3,11 @@ Description=Hindsight API Service
 After=network.target
 
 [Service]
-ExecStart=%%VENV_PATH%%/bin/python %%APP_PATH%%/hindsight_api.py
-PIDFile=%t/hindsight-api.pid
+Type=simple
+ExecStart=%%VENV_PATH%%/bin/gunicorn --chdir %%APP_PATH%% --enable-stdio-inheritance --bind localhost:5000 hindsight_api:app
 Environment="GOOGLE_APPLICATION_CREDENTIALS=%%SERVICE_ACCOUNT_JSON%%"
-Restart=always
+Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=default.target

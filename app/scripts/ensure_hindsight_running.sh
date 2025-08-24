@@ -17,7 +17,7 @@
 
 # Find the absolute path to the 'app' directory
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-APP_PATH="$SCRIPT_DIR/.."   # FIX (was scripts/app)
+APP_PATH="$SCRIPT_DIR/app"
 
 # --- 1. Check and Start the API Service ---
 if systemctl --user is-active --quiet hindsight-api.service; then
@@ -36,19 +36,15 @@ else
 fi
 
 # --- 3. Check and Start the Memory Daemon ---
-if systemctl --user is-active --quiet hindsight-daemon.service; then
+if pgrep -f memory_daemon.py > /dev/null; then
   DAEMON_STATUS="✅ Daemon: Running"
 else
-  if systemctl --user start hindsight-daemon.service 2>/dev/null; then
-    DAEMON_STATUS="⚠️ Daemon: Started (systemd)"
-  else
-    (cd "$APP_PATH" && nohup ./scripts/start_daemon.sh &>/dev/null &)
-    DAEMON_STATUS="⚠️ Daemon: Started (fallback)"
-  fi
+  # Use the absolute path to ensure nohup runs in the correct directory
+  (cd "$APP_PATH" && nohup ./start_daemon.sh &)
+  DAEMON_STATUS="⚠️ Daemon: Started"
 fi
 
 # --- Build the final message and send the notification ---
 MESSAGE_BODY=$(printf "%s\n%s\n%s" "$API_STATUS" "$TIMER_STATUS" "$DAEMON_STATUS")
 
-notify-send "Hindsight Status" "$MESSAGE_BODY" -i utilities-terminal
 notify-send "Hindsight Status" "$MESSAGE_BODY" -i utilities-terminal

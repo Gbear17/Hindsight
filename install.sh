@@ -46,7 +46,7 @@ fi
 
 log_info "Checking System Dependencies"
 missing_deps=()
-required_deps=("git" "curl" "zip" "recoll" "maim" "xdotool" "tesseract" "tesseract-data-eng")
+required_deps=("git" "curl" "zip" "recoll" "maim" "xdotool" "tesseract" "tesseract-data-eng" "gnome-terminal")
 
 for dep in "${required_deps[@]}"; do
     if ! command -v "$dep" &> /dev/null; then
@@ -133,18 +133,14 @@ mkdir -p "$HINDSIGHT_PATH"
 run_command rsync -a --exclude='.git/' --exclude='install.sh' "$(pwd)/" "$HINDSIGHT_PATH/"
 log_info "Files copied to ${HINDSIGHT_PATH}."
 
-# --- 6. Terminal Detection ---
-log_info "Running initial terminal detection..."
-"$SCRIPTS_PATH/detect_terminal.sh"
-
-# --- 7. Python Environment Setup ---
+# --- 6. Python Environment Setup ---
 log_info "Setting up Python Virtual Environment"
 run_command python -m venv "$VENV_PATH"
 log_info "Virtual environment created."
 run_command "$VENV_PATH/bin/pip" install -r "$HINDSIGHT_PATH/requirements.txt"
 log_info "Python requirements installed."
 
-# --- 8. Execute Configuration & Update ---
+# --- 7 & 8. Execute Configuration & Update ---
 log_info "Running Initial Configuration"
 "$SCRIPTS_PATH/configure.sh"
 

@@ -15,47 +15,34 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+# Hindsight Configuration Script
 # Reads from hindsight.conf to process and deploy systemd and desktop files.
 
 set -e
 HINDSIGHT_PATH=$(eval echo ~$USER)/hindsight
 CONF_FILE="$HINDSIGHT_PATH/hindsight.conf"
-source "$(dirname "$0")/helpers.sh"
 
 # --- 1. Safe Configuration Parsing ---
 get_config_value() {
     grep "^${1}=" "$CONF_FILE" | cut -d'=' -f2- | sed 's/"//g'
 }
 
-# Read all necessary values from the config file
 APP_PATH=$(get_config_value "APP_PATH")
 SCRIPTS_PATH=$(get_config_value "SCRIPTS_PATH")
 VENV_PATH=$(get_config_value "VENV_PATH")
-TERMINAL_CMD=$(get_config_value "TERMINAL_CMD")
-
-# --- FINAL FIX: Build a direct, robust execution command ---
-PYTHON_EXEC="'$VENV_PATH/bin/python'"
-MANAGER_SCRIPT="'$APP_PATH/manager.py'"
-EXEC_COMMAND=""
-
-if [[ "$TERMINAL_CMD" == "konsole" ]]; then
-    # Konsole uses '-e' followed by the command and its arguments
-    EXEC_COMMAND="$TERMINAL_CMD -e $PYTHON_EXEC $MANAGER_SCRIPT"
-else
-    # Most other terminals use '--' followed by the command and its arguments
-    EXEC_COMMAND="$TERMINAL_CMD -- $PYTHON_EXEC $MANAGER_SCRIPT"
-fi
+SERVICE_ACCOUNT_JSON=$(get_config_value "SERVICE_ACCOUNT_JSON")
 
 SYSTEMD_PATH="$HOME/.config/systemd/user"
 DESKTOP_APPS_PATH="$HOME/.local/share/applications"
 AUTOSTART_PATH="$HOME/.config/autostart"
+
 mkdir -p "$SYSTEMD_PATH" "$DESKTOP_APPS_PATH" "$AUTOSTART_PATH"
 
-# --- Stop Services ---
-log_info "Stopping all Hindsight services..."
+# --- 2. Stop Services ---
+echo "Stopping all Hindsight services..."
 "$SCRIPTS_PATH/stop_hindsight.sh"
 
-# --- Process Templates ---
+# --- 3. Process Templates ---
 TEMPLATE_FILES=(
     "hindsight-manager.desktop.template"
     "hindsight-api.service.template"
@@ -68,38 +55,47 @@ TEMPLATE_FILES=(
 for template_file in "${TEMPLATE_FILES[@]}"; do
     final_filename="${template_file%.template}"
     source_template_path="$HINDSIGHT_PATH/resources/$template_file"
-    temp_processed_file="/tmp/$final_filename"
+    temp_processed_file="$HINDSIGHT_PATH/$final_filename"
+
+    echo "----------------------------------------"
+    echo "Processing: $template_file"
     cp "$source_template_path" "$temp_processed_file"
 
-    log_info "Processing: $template_file"
-
+    # Generic replacements
     sed -i "s|%%HINDSIGHT_PATH%%|$HINDSIGHT_PATH|g" "$temp_processed_file"
     sed -i "s|%%APP_PATH%%|$APP_PATH|g" "$temp_processed_file"
     sed -i "s|%%SCRIPTS_PATH%%|$SCRIPTS_PATH|g" "$temp_processed_file"
     sed -i "s|%%VENV_PATH%%|$VENV_PATH|g" "$temp_processed_file"
-    sed -i "s|%%EXEC_COMMAND%%|$EXEC_COMMAND|g" "$temp_processed_file"
+    sed -i "s|%%SERVICE_ACCOUNT_JSON%%|$SERVICE_ACCOUNT_JSON|g" "$temp_processed_file"
     
-    # ... (File deployment logic remains the same) ...
+    # --- 4. Deploy Files Safely ---
     destination_path=""
-    if [[ "$final_filename" == *.desktop ]]; then
+    if [[ "$final_filename" == "recoll-hindsight.desktop" ]]; then
+        destination_path="$AUTOSTART_PATH/$final_filename"
+    elif [[ "$final_filename" == *.desktop ]]; then
         destination_path="$DESKTOP_APPS_PATH/$final_filename"
     elif [[ "$final_filename" == *.service ]] || [[ "$final_filename" == *.timer ]]; then
         destination_path="$SYSTEMD_PATH/$final_filename"
     fi
-    # Note: Autostart logic removed for simplicity unless needed.
 
     if [ -n "$destination_path" ]; then
-        log_info "  -> Deploying to: $destination_path"
-        mv "$temp_processed_file" "$destination_path"
+        echo "  -> Deploying to: $destination_path"
+        rm -f "$destination_path"
+        sleep 1
+        cp "$temp_processed_file" "$destination_path"
     else
-        log_error "  -> [WARNING] Unknown file type for $final_filename. Not deployed."
-        rm -f "$temp_processed_file"
+        echo "  -> [WARNING] Unknown file type for $final_filename. Not deployed."
     fi
+    
+    rm -f "$temp_processed_file" # Cleanup
 done
 
-# --- Finalize ---
-log_info "Reloading systemd user daemon..."
+# --- 5. Finalize ---
+echo "----------------------------------------"
+echo "Reloading systemd user daemon..."
 systemctl --user daemon-reload
-log_info "Updating desktop application database..."
-update-desktop-database "$DESKTOP_APPS_PATH" &> /dev/null
-log_info "✅ Configuration complete!"
+
+echo "Updating desktop application database..."
+update-desktop-database "$DESKTOP_APPS_PATH"
+
+echo "✅ Configuration complete!"
