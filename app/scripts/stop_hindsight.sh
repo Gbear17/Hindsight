@@ -16,9 +16,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Stop all services
-systemctl --user stop hindsight-api.service
-systemctl --user stop hindsight-rebuild.timer
-pkill -f memory_daemon.py
+systemctl --user stop hindsight-rebuild.timer 2>/dev/null || true
+systemctl --user stop hindsight-daemon.service 2>/dev/null || true
+systemctl --user stop hindsight-api.service 2>/dev/null || true
+pkill -f memory_daemon.py 2>/dev/null || true  # fallback
 
 # Send a confirmation notification
-notify-send "Hindsight Stopped" "All Hindsight backend services have been stopped." -i media-playback-stop
+notify-send "Hindsight Stopped" "All backend services have been stopped." -i media-playback-stop 2>/dev/null || true

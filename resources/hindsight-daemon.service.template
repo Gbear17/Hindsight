@@ -5,6 +5,7 @@ After=graphical-session.target
 [Service]
 Environment="DISPLAY=:0"
 ExecStart=%%SCRIPTS_PATH%%/start_daemon.sh
+PIDFile=%t/hindsight-daemon.pid
 WorkingDirectory=%%APP_PATH%%
 Restart=always
 RestartSec=10
