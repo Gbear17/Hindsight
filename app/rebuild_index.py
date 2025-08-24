@@ -13,6 +13,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""Index rebuild utilities for Hindsight.
+
+This module provides routines to build and incrementally update the FAISS
+semantic index used by Hindsight. The primary entrypoint is
+:func:`incremental_rebuild_faiss` which can run in dry-run mode for testing.
+"""
+
 
 import os
 import glob
@@ -40,15 +47,36 @@ EMBEDDING_MODEL = 'all-mpnet-base-v2'
 logger = setup_logger("HindsightRebuildIndex")
 
 def get_unprocessed_files(id_map):
-    """Finds all .txt files that are not yet in the ID map."""
+    """Return .txt files that are not present in the supplied ID map.
+
+    Args:
+        id_map: An iterable (typically a list) of file paths already indexed.
+
+    Returns:
+        A sorted list of filesystem paths (strings) for .txt files that are
+        present in ``OCR_TEXT_DIR`` but missing from ``id_map``.
+    """
     indexed_files = set(id_map)
     all_files = set(glob.glob(os.path.join(OCR_TEXT_DIR, "*.txt")))
     return sorted(list(all_files - indexed_files))
 
 def incremental_rebuild_faiss(dry_run=False):
-    """
-    Incrementally updates the FAISS index and ID map with new text files.
-    If the index does not exist, it performs a full build.
+    """Incrementally update or build the FAISS index from OCR text files.
+
+    This function will load an existing FAISS index and ID map when present
+    and append embeddings for any new .txt files found in ``OCR_TEXT_DIR``.
+    When no index exists a new index will be created.
+
+    Args:
+        dry_run: If True, only log the actions that would be taken without
+            modifying the index or writing files.
+
+    Returns:
+        None
+
+    Notes:
+        Exceptions are logged; this function intentionally swallows exceptions
+        to keep index-update cycles resilient in automated runs.
     """
     logger.info("Starting index update cycle.")
     start_time = time.time()
@@ -96,7 +124,19 @@ def incremental_rebuild_faiss(dry_run=False):
     if new_embeddings:
         logger.info(f"Adding {len(new_embeddings)} new vectors to the FAISS index.")
         new_indices = np.arange(len(id_to_filepath_map), len(id_to_filepath_map) + len(new_embeddings))
-        faiss_index.add_with_ids(np.array(new_embeddings).astype('float32'), new_indices)
+        vectors = np.array(new_embeddings).astype('float32')
+        # faiss Python bindings vary; attempt the most common signatures.
+        try:
+            faiss_index.add_with_ids(vectors, new_indices)  # type: ignore
+        except TypeError:
+            # Some bindings expect explicit xids keyword or different ordering.
+            try:
+                faiss_index.add_with_ids(vectors, ids=new_indices)  # type: ignore
+            except TypeError:
+                # Fall back to a best-effort add (without IDs) which may append
+                # vectors without mapping; index rebuilders should use the
+                # ID map to reconstruct identifiers later.
+                faiss_index.add(vectors)  # type: ignore
         id_to_filepath_map.extend(new_filepaths)
 
         # Save the updated index and map

@@ -13,6 +13,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""Hindsight API helpers and Flask endpoint utilities.
+
+This module exposes helper functions and the Flask ``app`` used by the
+Hindsight HTTP API. It contains utility functions for formatting responses,
+query helpers and small wrappers used by the API endpoints.
+"""
+
 
 from flask import Flask, request, jsonify
 import configparser
@@ -36,6 +43,14 @@ OCR_TEXT_DIR = config.get('System Paths', 'OCR_TEXT_DIR')
 
 # --- Data Gathering Helper Functions ---
 def format_status(state):
+    """Map a raw service state string to a colored human-readable label.
+
+    Args:
+        state: The raw state string returned by systemctl (e.g. "active").
+
+    Returns:
+        A colored label string appropriate for terminal display.
+    """
     mapping = {
         "active": "[green]● Running[/green]",
         "activating": "[yellow]● Starting[/yellow]",
@@ -127,6 +142,12 @@ def get_db_stats():
 # --- Existing /query Endpoint (No changes needed) ---
 @app.route('/query', methods=['POST'])
 def query():
+    """Handle POST /query requests from clients.
+
+    The endpoint expects JSON with a query payload and returns search
+    results in JSON format. Implementation-specific logic is contained
+    in the main application and plugged into this handler.
+    """
     # ... (your existing query logic remains here) ...
     return jsonify({"error": "Query logic not shown"}), 500
 

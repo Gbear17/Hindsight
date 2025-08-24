@@ -13,6 +13,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""Semantic and hybrid search utilities used by Hindsight.
+
+This module provides functions to initialize FAISS and embedding components,
+perform recoll and FAISS searches, and optionally refine queries via the
+Gemini refiner model.
+"""
+
 
 import subprocess
 import os
@@ -55,13 +62,24 @@ except Exception as e:
     logger.critical(f"Failed to load SentenceTransformer model. Semantic search will be unavailable. Error: {e}")
 
 # --- Configure the Google refiner model ---
-try:
-    refiner_model = genai.GenerativeModel(REFINER_MODEL)
-    logger.info("Successfully configured Gemini API for query refinement.")
-except Exception as e:
-    logger.critical(f"Failed to configure Gemini refiner model. Refinement will be unavailable. Error: {e}")
+# Some versions of the google.generativeai package do not expose a
+# GenerativeModel class; guard against that to avoid static import errors
+refiner_model = None
+if hasattr(genai, "GenerativeModel"):
+    try:
+        refiner_model = genai.GenerativeModel(REFINER_MODEL)
+        logger.info("Successfully configured Gemini API for query refinement.")
+    except Exception as e:
+        logger.critical(f"Failed to configure Gemini refiner model. Refinement will be unavailable. Error: {e}")
+else:
+    logger.warning("google.generativeai does not expose GenerativeModel; query refinement disabled.")
 
 def init_search_components():
+    """Load FAISS index and ID map into memory if available.
+
+    This function initializes the in-memory FAISS index and the mapping
+    from FAISS ids to file paths. It is safe to call multiple times.
+    """
     global faiss_index, id_to_filepath_map
     if faiss_index is None and os.path.exists(FAISS_INDEX_PATH):
         try:
@@ -74,6 +92,14 @@ def init_search_components():
             logger.exception("Failed to load FAISS index or file map. Semantic search will be unavailable.")
 
 def get_recoll_matches(query):
+    """Run a Recoll text search for the given query.
+
+    Args:
+        query: The plain-text search query to pass to Recoll.
+
+    Returns:
+        A list of result dictionaries containing source and content keys.
+    """
     try:
         recoll_command = ["recoll", "-d", "-t", "-q", query]
         search_results_raw = subprocess.check_output(recoll_command).decode().strip()
@@ -84,6 +110,15 @@ def get_recoll_matches(query):
         return []
 
 def get_faiss_matches(query, num_results=5):
+    """Perform semantic search using the FAISS index and embedding model.
+
+    Args:
+        query: The user query to embed and search.
+        num_results: Number of nearest neighbours to return.
+
+    Returns:
+        A list of result dictionaries containing source, content and distance.
+    """
     if faiss_index is None or not id_to_filepath_map or not embedding_model:
         logger.warning("FAISS index or embedding model not loaded, skipping semantic search.")
         return []
@@ -108,6 +143,15 @@ def get_faiss_matches(query, num_results=5):
         return []
 
 def refine_query_with_gemini(query):
+    """Refine a user query using the configured generative refiner model.
+
+    Args:
+        query: Original user query string.
+
+    Returns:
+        A refined query string produced by the refiner model, or the original
+        query if refinement is unavailable.
+    """
     if not refiner_model:
         logger.error("Refiner model not initialized, skipping refinement.")
         return query
@@ -120,6 +164,10 @@ def refine_query_with_gemini(query):
         return query
 
 def hybrid_search(query):
+    """Run a combined recoll + FAISS hybrid search for ``query``.
+
+    Returns combined results from recoll (text) and FAISS (semantic) searches.
+    """
     refined_query = refine_query_with_gemini(query)
     recoll_results = get_recoll_matches(refined_query)
     faiss_results = get_faiss_matches(query)

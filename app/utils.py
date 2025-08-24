@@ -13,6 +13,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""Utility helpers for logging and configuration.
+
+This module provides a small set of utilities for configuring logging that
+integrates with file rotation (watched files) and for loading the
+project-level configuration file.
+"""
+
 
 import os
 import logging
@@ -29,10 +36,17 @@ LOG_FILE = config.get('System Paths', 'LOG_FILE')
 LOG_DIR = os.path.dirname(LOG_FILE)
 
 class UnbufferedWatchedFileHandler(WatchedFileHandler):
-    """
-    A custom WatchedFileHandler that flushes the stream after every emit.
+    """A custom WatchedFileHandler that flushes the stream after every emit.
+
+    The handler ensures each log record is flushed and the underlying file
+    descriptor is synced so logs remain durable across process restarts.
     """
     def emit(self, record):
+        """Emit a log record and flush/sync the stream.
+
+        Args:
+            record: A ``logging.LogRecord`` instance.
+        """
         super().emit(record)
         self.flush()
         if self.stream:

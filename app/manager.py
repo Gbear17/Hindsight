@@ -13,6 +13,12 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""Manager UI and terminal-based dashboard for Hindsight.
+
+This module implements the curses-like Rich-based terminal dashboard used to
+control Hindsight services, view status, and run management actions.
+"""
+
 
 import subprocess
 import time
@@ -120,6 +126,13 @@ def read_keyboard_input(input_queue):
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 def flash(app_state, msg, duration=3):
+    """Set a transient flash message in the application state.
+
+    Args:
+        app_state: The shared application state dictionary.
+        msg: Message string to display.
+        duration: Number of seconds the message should remain visible.
+    """
     app_state["flash"] = msg
     app_state["flash_until"] = time.time() + duration
 

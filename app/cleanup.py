@@ -13,6 +13,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""Utilities for cleaning up old data and FAISS index files.
+
+This module contains functions to delete old screenshots and OCR text files
+based on a retention policy, and to remove FAISS index files to force a
+rebuild when necessary.
+"""
+
 
 import os
 import time
@@ -35,7 +42,11 @@ ID_MAP_PATH = config.get('System Paths', 'DB_DIR') + '/hindsight_id_map.json'
 logger = setup_logger("HindsightCleanup")
 
 def delete_old_data(dry_run=False):
-    """Finds and deletes data files older than DAYS_TO_KEEP."""
+    """Delete data files older than the configured retention period.
+
+    Args:
+        dry_run: When ``True`` only log which files would be deleted.
+    """
     logger.info(f"Starting data cleanup process. Retention period: {DAYS_TO_KEEP} days.")
     now = time.time()
     cutoff = now - (DAYS_TO_KEEP * 86400)
@@ -78,7 +89,11 @@ def delete_old_data(dry_run=False):
         logger.warning("It is recommended to run 'Clean FAISS Index' to force a full rebuild.")
 
 def clean_faiss_index(dry_run=False):
-    """Deletes the FAISS index and map files to force a full rebuild."""
+    """Remove FAISS index and ID map files to force a rebuild.
+
+    Args:
+        dry_run: When ``True`` only log which files would be deleted.
+    """
     index_files = [FAISS_INDEX_PATH, ID_MAP_PATH]
     files_exist = [f for f in index_files if os.path.exists(f)]
 

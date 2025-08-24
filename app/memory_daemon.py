@@ -13,6 +13,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""Background daemon that captures screenshots and runs OCR.
+
+This module implements the memory_daemon process which periodically captures
+the active window, runs OCR (Tesseract) and writes OCR text files used by the
+indexing pipeline.
+"""
+
 
 import time
 import subprocess
@@ -41,7 +48,12 @@ processing_lock = threading.Lock()
 last_screenshot_paths = {}
 
 def get_active_window_info():
-    """Gets the ID and title of the currently active window."""
+    """Return the active window ID and title, or (None, None) on failure.
+
+    Returns:
+        A tuple of (window_id, window_title) or (None, None) when the active
+        window could not be determined.
+    """
     try:
         env = os.environ.copy()
         env['DISPLAY'] = ':0'
@@ -54,7 +66,12 @@ def get_active_window_info():
         return None, None
 
 def extract_text_with_tesseract(screenshot_path, text_output_path):
-    """Runs Tesseract OCR on a screenshot and saves the text."""
+    """Run Tesseract OCR on an image and write the extracted text to a file.
+
+    Args:
+        screenshot_path: Path to the input image file.
+        text_output_path: Destination path for the OCR text output.
+    """
     try:
         ocr_text = subprocess.check_output(
             ["tesseract", screenshot_path, "stdout"], stderr=subprocess.DEVNULL
@@ -67,7 +84,12 @@ def extract_text_with_tesseract(screenshot_path, text_output_path):
         logger.exception(f"An unexpected Tesseract OCR error occurred for {screenshot_path}")
 
 def process_active_window():
-    """The main processing function for capturing and analyzing a window."""
+    """Capture the active window and produce OCR text for it.
+
+    This function is the core processing step used by the daemon loop. It
+    captures the active window, compares it against the last captured frame to
+    avoid duplicates, and runs OCR to produce a text file.
+    """
     if not processing_lock.acquire(blocking=False):
         return
     try:
@@ -112,6 +134,12 @@ def process_active_window():
         processing_lock.release()
 
 def main():
+    """Daemon entrypoint: ensure directories exist and start the loop.
+
+    This entrypoint creates necessary directories, then repeatedly calls
+    :func:`process_active_window` according to the configured polling
+    interval until interrupted.
+    """
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
     os.makedirs(OCR_TEXT_DIR, exist_ok=True)
     logger.info("Hindsight Daemon started. Monitoring activity...")

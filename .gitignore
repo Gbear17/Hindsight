@@ -28,3 +28,6 @@ backups
 
 # Info files
 resources/my-system-details.png
+
+# Temporary scripts
+temp-scripts/
