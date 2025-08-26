@@ -117,8 +117,27 @@ sed -i "s|%%OCR_TEXT_DIR%%|$DATA_DIR/ocr_text|g" hindsight.conf
 sed -i "s|%%DB_DIR%%|$DATA_DIR/db|g" hindsight.conf
 sed -i "s|%%LOG_FILE%%|$DATA_DIR/hindsight.log|g" hindsight.conf
 sed -i "s|%%SERVICE_ACCOUNT_JSON%%|$APP_PATH/service-account.json|g" hindsight.conf
+RECOLL_CONF_DIR="$DATA_DIR/recoll"
+sed -i "s|%%RECOLL_CONF_DIR%%|$RECOLL_CONF_DIR|g" hindsight.conf
 
 log_info "hindsight.conf generated successfully."
+
+# --- Create Recoll configuration directory & minimal recoll.conf if missing ---
+if ! command -v recollindex &>/dev/null; then
+    log_error "recollindex not found; Recoll search will not function until installed."
+else
+    mkdir -p "$RECOLL_CONF_DIR"
+    RECOLL_CONF_FILE="$RECOLL_CONF_DIR/recoll.conf"
+    if [ ! -f "$RECOLL_CONF_FILE" ]; then
+        cat > "$RECOLL_CONF_FILE" <<EOF
+topdirs = $DATA_DIR/ocr_text
+indexedmimetypes = text/plain
+noaspell = 1
+loglevel = 2
+EOF
+        log_info "Created initial Recoll config at $RECOLL_CONF_FILE"
+    fi
+fi
 
 # --- 4. Make Source Scripts and Python Fiels Executable ---
 log_info "Setting script and python file permissions"

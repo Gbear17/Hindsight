@@ -25,9 +25,11 @@ import time
 import subprocess
 import threading
 import os
+import shutil
 from PIL import Image
 import configparser
 from utils import setup_logger
+import datetime
 
 # --- New Config Parser Logic ---
 config = configparser.ConfigParser()
@@ -36,6 +38,8 @@ config.read(config_path)
 
 # --- Fetching settings ---
 POLL_INTERVAL = config.getint('User Settings', 'POLL_INTERVAL')
+PAUSE_WHEN_LOCKED = config.getboolean('User Settings', 'PAUSE_WHEN_LOCKED', fallback=True)
+PAUSE_ON_SUSPEND = config.getboolean('User Settings', 'PAUSE_ON_SUSPEND', fallback=True)
 EXCLUDED_APPS_STR = config.get('User Settings', 'EXCLUDED_APPS', fallback='')
 EXCLUDED_APPS = [app.strip() for app in EXCLUDED_APPS_STR.split(',') if app.strip()]
 SCREENSHOT_DIR = config.get('System Paths', 'SCREENSHOT_DIR')
@@ -46,6 +50,52 @@ logger = setup_logger("HindsightDaemon")
 # --- State Management ---
 processing_lock = threading.Lock()
 last_screenshot_paths = {}
+_last_lock_check = 0.0
+_LOCK_CHECK_INTERVAL = 5  # seconds
+_last_lock_log = 0.0
+_LOCK_LOG_INTERVAL = 60  # seconds
+_suspend_state = False
+_last_suspend_log = 0.0
+_SUSPEND_LOG_INTERVAL = 60  # seconds
+
+def _resolve_session_id():
+    sid = os.environ.get("XDG_SESSION_ID")
+    if sid:
+        return sid
+    # Fallback: parse loginctl list-sessions
+    try:
+        out = subprocess.check_output(["loginctl", "list-sessions", "--no-legend"], text=True)
+        user = os.environ.get("USER")
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) >= 3 and parts[2] == user:
+                return parts[0]
+    except Exception:
+        pass
+    return None
+
+def session_locked():
+    """Best-effort detection of desktop lock state.
+
+    Uses `loginctl show-session <id> -p LockedHint`. Returns False if undetectable.
+    Cached for _LOCK_CHECK_INTERVAL seconds to reduce overhead.
+    """
+    global _last_lock_check, _cached_locked
+    now = time.time()
+    if ' _cached_locked' not in globals():
+        _cached_locked = False  # type: ignore
+    if now - _last_lock_check < _LOCK_CHECK_INTERVAL:
+        return _cached_locked  # type: ignore
+    _last_lock_check = now
+    sid = _resolve_session_id()
+    if not sid:
+        return False
+    try:
+        out = subprocess.check_output(["loginctl", "show-session", sid, "-p", "LockedHint"], text=True)
+        _cached_locked = ("LockedHint=yes" in out)
+        return _cached_locked  # type: ignore
+    except Exception:
+        return False
 
 def get_active_window_info():
     """Return the active window ID and title, or (None, None) on failure.
@@ -143,8 +193,51 @@ def main():
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
     os.makedirs(OCR_TEXT_DIR, exist_ok=True)
     logger.info("Hindsight Daemon started. Monitoring activity...")
+
+    # Start background thread to watch for system suspend/resume (DBus) if desired
+    def suspend_watcher():
+        global _suspend_state, _last_suspend_log
+        if not PAUSE_ON_SUSPEND:
+            return
+        if not shutil.which("dbus-monitor"):
+            logger.debug("dbus-monitor not found; suspend detection disabled.")
+            return
+        cmd = ["dbus-monitor", "--system", "type='signal',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'"]
+        try:
+            with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True) as proc:
+                if proc.stdout is None:
+                    return
+                for line in proc.stdout:
+                    if 'boolean true' in line:
+                        if not _suspend_state:
+                            _suspend_state = True
+                            logger.info("System preparing for suspend; pausing capture.")
+                    elif 'boolean false' in line:
+                        if _suspend_state:
+                            _suspend_state = False
+                            logger.info("System resumed from suspend; resuming capture.")
+        except Exception:
+            logger.debug("Suspend watcher terminated or failed.")
+
+    threading.Thread(target=suspend_watcher, name="SuspendWatcher", daemon=True).start()
     try:
         while True:
+            if PAUSE_ON_SUSPEND and _suspend_state:
+                global _last_suspend_log
+                now = time.time()
+                if now - _last_suspend_log > _SUSPEND_LOG_INTERVAL:
+                    logger.info("Suspended state active; capture paused.")
+                    _last_suspend_log = now
+                time.sleep(POLL_INTERVAL)
+                continue
+            if PAUSE_WHEN_LOCKED and session_locked():
+                global _last_lock_log
+                now = time.time()
+                if now - _last_lock_log > _LOCK_LOG_INTERVAL:
+                    logger.info("System locked; pausing capture.")
+                    _last_lock_log = now
+                time.sleep(POLL_INTERVAL)
+                continue
             process_active_window()
             time.sleep(POLL_INTERVAL)
     except KeyboardInterrupt:

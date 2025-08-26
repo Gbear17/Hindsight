@@ -8,6 +8,11 @@ DAYS_TO_KEEP=%%DAYS_TO_KEEP%%
 POLL_INTERVAL=%%POLL_INTERVAL%%
 REFINER_MODEL=%%REFINER_MODEL%%
 EXCLUDED_APPS=""
+PAUSE_WHEN_LOCKED=true
+PAUSE_ON_SUSPEND=true
+MANAGER_COLUMNS=75
+MANAGER_ROWS=19
+THEME_MODE=auto
 
 [Developer Settings]
 GIT_BRANCH=%%GIT_BRANCH%%
@@ -27,3 +32,17 @@ OCR_TEXT_DIR=%%OCR_TEXT_DIR%%
 DB_DIR=%%DB_DIR%%
 LOG_FILE=%%LOG_FILE%%
 SERVICE_ACCOUNT_JSON=%%SERVICE_ACCOUNT_JSON%%
+
+[Search]
+# Enable / disable individual search backends
+ENABLE_RECOLL=true
+ENABLE_FAISS=true
+
+# Recoll specific settings
+RECOLL_CONF_DIR=%%RECOLL_CONF_DIR%%
+RECOLL_NICENESS=10
+RECOLL_MAX_SECONDS=25
+
+# FAISS embedding cycle limits (to reduce resource spikes)
+FAISS_MAX_FILES_PER_CYCLE=0  # 0 = no explicit cap
+FAISS_MAX_SECONDS=0          # 0 = no time cap

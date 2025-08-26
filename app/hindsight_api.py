@@ -29,6 +29,7 @@ import psutil
 import json
 import glob
 from datetime import datetime, timezone, timedelta
+import stat
 
 app = Flask(__name__)
 
@@ -38,8 +39,13 @@ config_path = os.path.expanduser('~/hindsight/hindsight.conf')
 config.read(config_path)
 
 # --- Fetching settings for helper functions ---
-ID_MAP_PATH = os.path.join(config.get('System Paths', 'DB_DIR'), 'hindsight_id_map.json')
+DB_DIR = config.get('System Paths', 'DB_DIR')
+ID_MAP_PATH = os.path.join(DB_DIR, 'hindsight_id_map.json')
+FAISS_INDEX_PATH = os.path.join(DB_DIR, 'hindsight_faiss.index')
 OCR_TEXT_DIR = config.get('System Paths', 'OCR_TEXT_DIR')
+RECOLL_CONF_DIR = config.get('Search', 'RECOLL_CONF_DIR', fallback=os.path.join(DB_DIR, 'recoll'))
+ENABLE_RECOLL = config.getboolean('Search', 'ENABLE_RECOLL', fallback=True)
+ENABLE_FAISS = config.getboolean('Search', 'ENABLE_FAISS', fallback=True)
 
 # --- Data Gathering Helper Functions ---
 def format_status(state):
@@ -117,17 +123,81 @@ def get_index_schedule():
         return f"~ {next_hour:02d}:{next_minute:02d}"
     return f"~ {now.hour:02d}:{next_minute:02d}"
 
-def get_last_update_time():
-    """Gets the timestamp of the last index update."""
+def format_time(ts):
     try:
-        if not os.path.exists(ID_MAP_PATH) or os.path.getsize(ID_MAP_PATH) == 0:
-            return "N/A"
-        with open(ID_MAP_PATH, 'r') as f: data = json.load(f)
-        if not data: return "N/A"
-        latest_timestamp = max(float(k) for k in data.keys())
-        return datetime.fromtimestamp(latest_timestamp).strftime('%H:%M:%S')
-    except (json.JSONDecodeError, ValueError, FileNotFoundError):
+        return datetime.fromtimestamp(ts).strftime('%H:%M:%S')
+    except Exception:
         return "N/A"
+
+def get_faiss_stats():
+    """Return FAISS processed/unprocessed counts and last run time."""
+    if not ENABLE_FAISS:
+        return {"faiss_processed": "Disabled", "faiss_unprocessed": "Disabled", "faiss_last_run": "-"}
+    total_txt = len(glob.glob(os.path.join(OCR_TEXT_DIR, '*.txt')))
+    processed = 0
+    if os.path.exists(ID_MAP_PATH):
+        try:
+            with open(ID_MAP_PATH, 'r', encoding='utf-8') as f:
+                id_map = json.load(f)
+            if isinstance(id_map, list):
+                processed = len(id_map)
+        except Exception:
+            processed = 0
+    unprocessed = max(total_txt - processed, 0)
+    # last run = mtime of FAISS index or id map (latest)
+    mtimes = []
+    for p in (FAISS_INDEX_PATH, ID_MAP_PATH):
+        if os.path.exists(p):
+            try:
+                mtimes.append(os.path.getmtime(p))
+            except Exception:
+                pass
+    last_run = format_time(max(mtimes)) if mtimes else "N/A"
+    return {
+        "faiss_processed": f"{processed}",
+        "faiss_unprocessed": f"{unprocessed}",
+        "faiss_last_run": last_run
+    }
+
+def get_recoll_stats():
+    """Approximate Recoll indexing stats based on xapiandb mtime."""
+    if not ENABLE_RECOLL:
+        return {"recoll_processed": "Disabled", "recoll_unprocessed": "Disabled", "recoll_last_run": "-"}
+    xapiandb = os.path.join(RECOLL_CONF_DIR, 'xapiandb')
+    total_txt = len(glob.glob(os.path.join(OCR_TEXT_DIR, '*.txt')))
+    if not os.path.isdir(xapiandb):
+        return {"recoll_processed": "0", "recoll_unprocessed": f"{total_txt}", "recoll_last_run": "N/A"}
+    # Determine index last update time by newest file in xapiandb
+    latest = 0
+    try:
+        for root, dirs, files in os.walk(xapiandb):
+            for name in files:
+                path = os.path.join(root, name)
+                try:
+                    mt = os.path.getmtime(path)
+                    if mt > latest:
+                        latest = mt
+                except Exception:
+                    continue
+    except Exception:
+        latest = 0
+    # Count unprocessed = OCR files newer than latest mtime
+    unprocessed = 0
+    if latest:
+        for fpath in glob.glob(os.path.join(OCR_TEXT_DIR, '*.txt')):
+            try:
+                if os.path.getmtime(fpath) > latest:
+                    unprocessed += 1
+            except Exception:
+                continue
+    else:
+        unprocessed = total_txt
+    processed = max(total_txt - unprocessed, 0)
+    return {
+        "recoll_processed": f"{processed}",
+        "recoll_unprocessed": f"{unprocessed}",
+        "recoll_last_run": format_time(latest) if latest else "N/A"
+    }
 
 def get_db_stats():
     """Calculates database size and record count."""
@@ -158,6 +228,9 @@ def get_status():
     cpu, mem, io = get_resource_usage()
     db_size, total_records = get_db_stats()
 
+    faiss_stats = get_faiss_stats()
+    recoll_stats = get_recoll_stats()
+
     status_data = {
         # Service Status
         "api_status": get_service_status("hindsight-api.service"),
@@ -170,7 +243,11 @@ def get_status():
         # Index Stats
         "db_size": db_size,
         "total_records": total_records,
-        "last_update": get_last_update_time(),
+        # Recoll details
+        **recoll_stats,
+        # FAISS details
+        **faiss_stats,
+        # Shared schedule (timer drives both phases)
         "next_update": get_index_schedule()
     }
     return jsonify(status_data)
